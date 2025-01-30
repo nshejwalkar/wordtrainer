@@ -1,0 +1,64 @@
+/* Hide the default file input */
+input[type="file"] {
+   display: none;
+}
+
+/* Style the custom file upload button */
+label.uploadButton {
+   display: inline-block;
+   padding: 10px 20px;
+   background-color: #007bff;
+   color: white;
+   border: none;
+   border-radius: 5px;
+   cursor: pointer;
+   font-size: 14px;
+}
+
+label.uploadButton:hover {
+   background-color: #0056b3;
+}
+
+p#filename, p#errorMessage {
+   margin-top: 10px;
+   white-space: normal;
+   word-wrap: break-word;
+}
+
+p.error {
+   color: red;
+   font-weight: bold;
+}
+
+p.success {
+   color: green;
+   font-weight: bold;
+}
+
+#board {
+   display: grid;
+   gap: 10px; /* Increases spacing between boxes for better aesthetics */
+   grid-template-columns: repeat(4, auto); /* Adjusts the number of columns dynamically */
+   justify-content: center; /* Centers the grid horizontally */
+   margin: 20px auto;
+}
+
+#board div {
+   border: 1px solid #ddd;
+   padding: 10px;
+   text-align: center;
+   font-size: 16px; /* Reduces font size for better proportions */
+   background-color: #f9f9f9;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   height: 40px; /* Smaller height for the boxes */
+   width: 40px; /* Smaller width for the boxes */
+   font-family: Arial, sans-serif;
+   border-radius: 4px; /* Adds slight rounding for a cleaner look */
+}
+
+#board div:hover {
+   background-color: #e0e0e0;
+   cursor: pointer; /* Indicates interactivity when hovering */
+}

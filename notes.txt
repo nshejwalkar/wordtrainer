@@ -1,0 +1,15 @@
+need cors in order for same host/origin frontend to communicate with backend.
+automatic realoading is usually due to default form behavior, but for me it was live reload
+
+image processing
+pytesseract is a library on top of the tesseract engine
+iphones do not ss and sr at the same res. as native resolution
+
+problem (star):
+Im working on this app to analyze word hunt video gameplay, and send back stats based on how the user played. 
+I set up a basic html js frontend, flask backend. I was sending a post reuest with the video data to my flask app and expecting it to send me back some data after processing. i took a couple days off of working on the routing part of the app to work on like the image processing stuff, and after I was satisfied with that, I wanted to make sure it could feed data to the frontend correctly. So I started up my flask app, but I kept on receiving a response that was different than the one I was trying to send back. After some thinking, I realized it was sending me back a string from an older version of my flask app. 
+- My first thought was that something was getting wrongly cached. So I turned off the caching in chrome and deleted my __pycache__ folder.
+- I then realized that my flask app wasnt in debug mode, and that it probably wasnt reloading to the changes in my app. So I set it to debug mode and tried changing some flask env variables, but after I confirmed that it was updating, and the problem was still there, I ruled that out.
+- next thing I did was look at the network traffic using chrome devtools. Looking at the network tab, I could see that my frontend was still sending the reuest to the address and port that my flask app was running on. So I decided to take down the backend completely, and after rerunning that same process, it was still sending it to the same address and port.
+- i was confused at that point, but I decided to use netstat | findstr 5000 to check what was running there if anything, and it turns out there was an instance of my backend still running somehow. i used powershell and realized it had been running for over 3 days in the background.
+I just killed the process and the app worked fine now.

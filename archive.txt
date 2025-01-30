@@ -1,0 +1,11 @@
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) 
+print(f'video resolution is {height}x{width}')
+print(f'timer ytop={338/height}, ybottom={390/height}, xtop={620/width}, xbottom={820/width}')
+print(f'board ytop={817/height}, ybottom={1522/height}, xtop={91/width}, xbottom={797/width}')
+print(f'words ytop={186/height}, ybottom={221/height}, xtop={6/width}, xbottom={559/width}')
+print(f'score ytop={223/height}, ybottom={286/height}, xtop={552/width}, xbottom={797/width}')
+# timer: [338:390, 650:900]
+# board: [817:1522, 91:797]
+# words: [186:221, 6:559]
+# score: [223:286, 552:797]
