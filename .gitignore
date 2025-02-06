@@ -1,0 +1,17 @@
+# Ignore the large video file
+ScreenRecording_01-14-2025 04-06-33_1.mp4
+
+# Common ignores for Python projects (if applicable)
+backend/uploads/
+__pycache__/
+*.py[cod]
+*.log
+
+# Ignore MacOS system files
+.DS_Store
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore environment files
+.env
