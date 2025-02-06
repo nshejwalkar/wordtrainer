@@ -3,7 +3,7 @@
 
 # Common ignores for Python projects (if applicable)
 backend/uploads/
-__pycache__/
+backend/__pycache__/
 *.py[cod]
 *.log
 
