@@ -13,3 +13,15 @@ I set up a basic html js frontend, flask backend. I was sending a post reuest wi
 - next thing I did was look at the network traffic using chrome devtools. Looking at the network tab, I could see that my frontend was still sending the reuest to the address and port that my flask app was running on. So I decided to take down the backend completely, and after rerunning that same process, it was still sending it to the same address and port.
 - i was confused at that point, but I decided to use netstat | findstr 5000 to check what was running there if anything, and it turns out there was an instance of my backend still running somehow. i used powershell and realized it had been running for over 3 days in the background.
 I just killed the process and the app worked fine now.
+
+
+to start:
+flask run from cmd (be in backend folder)
+click on frontend/index.html then start live server
+
+scraping words:
+- figure out why even at 120 fps, the frame counts are off
+- either have smarter preprocessing for the words or have variable cropping based on the number (number not guaranteed either though)
+
+future:
+- standardize video for all iphone sr resolutions 

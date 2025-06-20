@@ -1,4 +1,5 @@
 document.getElementById('fileInput').addEventListener('change', async function() {
+   console.log("CHANGE EVENT FIRED");
    // event.preventDefault();  // prevents auto reload on ok click (this is not it, it was liveserver auto reloading that was the issue)
 
    const file = this.files[0];
@@ -39,7 +40,7 @@ async function sendVideoToBackend(file) {
    // fetch api is a way to send http requests and process responses all in one.
    // it returns a promise
    try {
-      const response = await fetch('http://localhost:5000/upload', {
+      const response = await fetch('http://localhost:5000/upload', {  // upload is the endpoint in the backend
          method: 'POST',
          body: formData,
       });
@@ -55,7 +56,7 @@ async function sendVideoToBackend(file) {
    }
    catch (error) {
       console.error('Error:', error);
-      alert('error occurred while uploading video. server is probably not running');
+      alert('error occurred while uploading video. server is probably not running lol');
    }
 }
 
