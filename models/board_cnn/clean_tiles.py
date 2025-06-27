@@ -2,34 +2,28 @@ import cv2, os
 from tqdm import tqdm
 import numpy as np
 
-ROOT = '../../models_data/train'      # A/…/Z folders
+ROOT = '../../models_data/train/W'      # A/…/Z folders
 SIZE = 90                             # final canvas size
+BORDER_SIZE = 10
 
-for cls in os.listdir(ROOT):
-   cls_dir = os.path.join(ROOT, cls)
-   if not os.path.isdir(cls_dir): continue
-   for fname in tqdm(os.listdir(cls_dir), desc=cls):
-      if not fname.lower().endswith('.png'): 
-         print(f'didnt exist: {cls_dir}/{fname}')
-         continue
-      p = os.path.join(cls_dir, fname)
-      img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
+image_path = os.listdir(ROOT)[1]
+image_path = os.path.join(ROOT, image_path)
+print(image_path)
 
-      # --- Step-1: threshold & keep largest component -------------
-      _, bw = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY|cv2.THRESH_OTSU)
-      n, labels, stats, _ = cv2.connectedComponentsWithStats(bw, connectivity=8)
-      if n <= 1:   # no foreground
-         continue
-      biggest = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-      mask = (labels == biggest).astype(np.uint8) * 255
+image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+print(f'shape: {image.shape}')
 
-      # --- Step-2: crop to glyph, paste on new canvas -------------
-      y,x,h,w = cv2.boundingRect(mask)     # note: (x,y,w,h)
-      glyph   = mask[y:y+h, x:x+w]
+cv2.imshow("image", image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
 
-      canvas  = np.zeros((SIZE, SIZE), dtype=np.uint8)
-      pad_y   = (SIZE - h) // 2
-      pad_x   = (SIZE - w) // 2
-      canvas[pad_y:pad_y+h, pad_x:pad_x+w] = glyph
+# bordered_image = cv2.copyMakeBorder(image, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+bordered_image = np.zeros_like(image)
+# [10:80]
+bordered_image[BORDER_SIZE:SIZE-BORDER_SIZE][BORDER_SIZE:SIZE-BORDER_SIZE] = image[BORDER_SIZE:SIZE-BORDER_SIZE][BORDER_SIZE:SIZE-BORDER_SIZE]
+print(f'shape: {bordered_image.shape}')
 
-      cv2.imwrite(p, canvas)
+# Display the image with the border
+cv2.imshow('Image with Black Border', bordered_image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
