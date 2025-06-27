@@ -1,0 +1,19 @@
+<h2>Select your phone model:</h2>
+<select id="phoneDropdown">
+  <option value="iPhone12">iPhone 12</option>
+  <option value="other">Other / Not Listed</option>
+</select>
+<button onclick="next()">Continue</button>
+
+<script>
+  function next() {
+    const phone = document.getElementById("phoneDropdown").value;
+    if (phone === "other") {
+      window.location.href = "annotate.html";
+    } else {
+      // store screen resolution or MAGIC mapping
+      localStorage.setItem("phoneModel", phone);
+      window.location.href = "results.html";
+    }
+  }
+</script>

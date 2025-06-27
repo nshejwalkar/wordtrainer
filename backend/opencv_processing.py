@@ -1,13 +1,16 @@
 import cv2, pytesseract
 import numpy as np
 import subprocess
+import os, glob
 
 # VERY hardcoded for now. works for my phone (iPhone 13), might work for others
 pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
 sample_video = './uploads/iphone12.mp4'
+# sample_video = './uploads/ScreenRecording_06-23-2025 19-51-01_1.mov'
 sample_video_120 = './uploads/iphone12_120.mp4'
+sample_image = './uploads/IMG_6364.PNG'
 
-custom_config = '-l eng --psm 6' # -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ"'
+custom_config = '-l eng --psm 6 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ"'
 custom_config_words = '-l eng --psm 7 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+"'
 
 # need relatives. pixels never guaranteed to match
@@ -43,7 +46,8 @@ def transcode_to_120fps(video_path, output_path):
 def _magic_to_pixels(video_path):
    cap = cv2.VideoCapture(video_path)
    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-   height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))  
+   height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+   print(f"Video dimensions: {width}x{height}")
    cap.release()
    pixels = {}
    for key in MAGIC.keys():
@@ -58,6 +62,7 @@ def _magic_to_pixels(video_path):
 # extracts the region of interest (ROI) from the frame based on the magic coordinates
 # interest is a key in the magic dictionary: 'time', 'board', 'word_count', 'score'
 def _get_roi(frame, magic_pix, interest):
+   print(frame.shape)
    interest_subdict = magic_pix[interest]
    ytop = interest_subdict['ytop']
    ybottom = interest_subdict['ybottom']
@@ -65,6 +70,7 @@ def _get_roi(frame, magic_pix, interest):
    xright = interest_subdict['xright']
    roi = frame[ytop:ybottom, xleft:xright]
    # roi = frame[interest_subdict['ytop']:interest_subdict['ybottom'], interest_subdict['xleft']:interest_subdict['xright']]
+   print(roi.shape)
    return roi
 
 # gets the nth frame from the video
@@ -98,7 +104,7 @@ def _apply_preprocessing_board(roi):  # somehow this works
    lower = np.array([0,0,0])
    upper = np.array([180,100,100])
    # mask = cv2.inRange(hsv, lower, upper)
-
+   print(closing_contours[:500])
    return closing_contours
 
 
@@ -154,7 +160,7 @@ def seek_thru_video(video_path, start_frame=0, max_display_width=1280):
    cv2.destroyAllWindows()
 
 
-# gets the frame with the start time in it, and returns it
+# binary searches between the first frame and the middle frame of the video
 def get_frame_with_start(video_path):
    cap = cv2.VideoCapture(video_path)
    fnum = 0
@@ -163,8 +169,12 @@ def get_frame_with_start(video_path):
    print(f'fps is {fps}')
    magic_pix = _magic_to_pixels(video_path)
    print(magic_pix)
+   i = 0
+   j = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)/2)  # start at the middle of the video
    
-   while True:
+   while i < j:
+      mid = (i + j) // 2
+      cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
       ret, frame = cap.read()
       if not ret: break
 
@@ -188,23 +198,106 @@ def get_frame_with_start(video_path):
    cap.release()
    return None
    
+def _split_into_tiles(board_roi, board_size):
+   TARGET_SIZE = 90  # size of each tile after cropping and padding
+   h, w = board_roi.shape[:2]
+   tile_h, tile_w = h // board_size, w // board_size
+
+   tiles = []
+   for row in range(board_size):
+      for col in range(board_size):
+         x_start = col * tile_w
+         y_start = row * tile_h
+         tile = board_roi[y_start:y_start+tile_h, x_start:x_start+tile_w]
+
+         # same exact thing as in template cleaning: bounding box + cropping
+         _, thresh = cv2.threshold(tile, 0, 255, cv2.THRESH_BINARY)
+         coords = cv2.findNonZero(thresh)
+         x, y, w, h = cv2.boundingRect(coords)
+
+         # resize to 40x40 (need to crop, not pad)
+         cropped = tile[y:y+h, x:x+w]
+         
+         if cropped.shape[0] > TARGET_SIZE or cropped.shape[1] > TARGET_SIZE:
+            padded = cv2.resize(cropped, (TARGET_SIZE, TARGET_SIZE))
+         else:
+            pad_x = (TARGET_SIZE - cropped.shape[1]) // 2
+            pad_y = (TARGET_SIZE - cropped.shape[0]) // 2
+            padded = cv2.copyMakeBorder(cropped, pad_y, TARGET_SIZE - cropped.shape[0] - pad_y,
+                                       pad_x, TARGET_SIZE - cropped.shape[1] - pad_x,
+                                       cv2.BORDER_CONSTANT, value=0)
+            
+         print(f'area: {cropped.shape[0]*cropped.shape[1]}')
+         blur = cv2.bilateralFilter(cropped, 5, 50, 50)  # smooth the tile
+
+         tiles.append(padded)  # add to tiles
+
+   return tiles
+
+def _get_letter_from_tile(tile):
+   TEMPLATE_DIR = 'templates/clean'  # directory with cleaned templates
+   min_score = float('inf')
+   best_match = None
+
+   # iterate through all templates in the directory
+   for fname in os.listdir(TEMPLATE_DIR):
+      template = cv2.imread(os.path.join(TEMPLATE_DIR, fname), cv2.IMREAD_GRAYSCALE)  # need grayscale
+
+      result = cv2.matchTemplate(tile, template, cv2.TM_SQDIFF_NORMED)  # lower is better
+      minval, _, _, _ = cv2.minMaxLoc(result)
+      
+      # print(f"Template {fname}: score = {minval}")
+
+      if minval < min_score:
+         min_score = minval
+         best_match = fname[0].upper()
+
+   # print(f"Best match: {best_match} with score {min_score}")
+
+   return best_match
+
 # extracts the board from the video and returns it as a matrix of characters
 def extract_board(video_path):
    frame = _get_frame(video_path, 160)  # starts at the 160th frame, around 2 seconds in. change later
    magic_pix = _magic_to_pixels(video_path)
    board_roi = _get_roi(frame, magic_pix, 'board')
    board_roi = _apply_preprocessing_board(board_roi)
-   text = pytesseract.image_to_string(board_roi, config=custom_config)
-   text = text.replace(" ", "").replace("|", "I").replace("\n\n", "\n").rstrip()
-   print(text)
-   # turn to a matrix
-   send = text.split('\n')
-   for i in range(len(send)):
-      send[i] = list(send[i])
    cv2.imshow('board roi', board_roi)
    cv2.waitKey(0)
    cv2.destroyAllWindows()
-   return send
+   tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
+   for i, tile in enumerate(tiles):
+      cv2.imshow(f'tile {i}', tile)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
+      # letter = _get_letter_from_tile(tile)
+      # print(letter, end='', flush=True)
+      # if (i + 1) % 5 == 0:
+      #    print(flush=True)
+   
+   # turn to a matrix
+   # send = text.split('\n')
+   # for i in range(len(send)):
+   #    send[i] = list(send[i])
+   
+   # return send
+
+def extract_board_from_image(image_path):
+   print(os.path.exists('./uploads/IMG_6364.PNG'))
+   for f in glob.glob('./uploads/*.PNG'):
+      img = cv2.imread(f)
+      print(f"{f}: {'OK' if img is not None else 'Failed'}")
+   frame = cv2.imread(image_path)
+   magic_pix = _magic_to_pixels(image_path)
+   print(magic_pix)
+   board_roi = _get_roi(frame, magic_pix, 'board')
+   if board_roi is None:
+      raise ValueError("Failed to extract board ROI from the image.")
+   board_roi = _apply_preprocessing_board(board_roi)
+   cv2.imshow('board roi', board_roi)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
+
    
 def _apply_preprocessing_word_count(roi):
    # make gray
@@ -357,10 +450,11 @@ def find_start_and_end(video_path):
    return start_frame, end_frame
 
 if __name__ == '__main__':
-   # seek_thru_video(sample_video_120, start_frame=270)
+   # seek_thru_video(sample_video_120, start_frame=0)
    # transcode_to_120fps(sample_video, sample_video_120)
-   extract_words_found(sample_video_120)
-   # extract_board(sample_video)
+   # extract_words_found(sample_video_120)
+   extract_board(sample_video)
+   # extract_board_from_image(sample_image)
    # frame = _get_frame(sample_video, 500)
    # frame = _get_frame(sample_video_120, 6132)
    # roi = _get_roi(frame, _magic_to_pixels(sample_video), 'words')
@@ -369,40 +463,4 @@ if __name__ == '__main__':
    # cv2.waitKey(0)
    # cv2.destroyAllWindows()
 
-# extract_board(sample_video)
-
 # cpp errors given by poor error handling in cv2. make sure file path is full.
-# frame = get_frame_with_start(sample_video)
-# cap = cv2.VideoCapture(sample_video)
-# fps = cap.get(cv2.CAP_PROP_FPS)
-
-# i=0
-# while True:
-#    ret, frame = cap.read()
-#    if not ret: break
-#    i+=1
-#    print(i, end=' ', flush=True)
-
-#    if i==int(fps*2):
-#       # convert magic to pixels
-#       magic_pix = _magic_to_pixels(magic, sample_video)
-#       print(magic_pix)
-#       print(f'video resolution is {frame.shape[0]}x{frame.shape[1]}') 
-#       cv2.imshow('Frame', _get_roi(frame, magic_pix, 'time'))
-#       cv2.waitKey(0)
-#       cv2.destroyAllWindows()
-#       break
-
-# get_frame_with_start(sample_video)
-
-# img = cv2.imread('../iphone12ss.png', 0)
-# print(f'shape of image is {img.shape[0]}x{img.shape[1]}')
-# img = img[192:220, 375:460]
-# cv2.imshow('image', img)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-# cv2.imshow('Image', frame) [375:460, 192:220]  y span, x span. goes from top->bottom, left->right
-
-# board: [817:1522, 91:797]
-# words: [186:221, 6:559]
-# score: [223:286, 552:797]

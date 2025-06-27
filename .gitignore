@@ -4,7 +4,7 @@
 # Common ignores for Python projects (if applicable)
 backend/csvs/
 backend/uploads/
-backend/__pycache__/
+backend/__pycache__/*
 *.py[cod]
 *.log
 

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Upload your video here</title>
+      <link rel="stylesheet" href="style.css" />
+   </head>
+   <body>
+      <h1>Upload your video underneath</h1>
+      <h2>FOR THE BEST RESULTS:</h2>
+      <ul>
+         <li>Do not crop or edit the screen recording</li>
+         <li>Start the recording from the "How to play" screen or before</li>
+      </ul>
+      <!-- the og, hidden button -->
+      <input type="file" id="fileInput" />
+      <!-- this is the custom upload button -->
+      <label for="fileInput" class="uploadButton">Choose File</label>
+      <p id="fileName"></p>
+      <p id="errorMessage" class="error"></p>
+      <p id="successMessage" class="success"></p>
+      <div id="board"></div>
+
+      <script src="script.js">
+         const urlParams = new URLSearchParams(window.location.search);
+         const isGuest = urlParams.get('guest');
+         const user = localStorage.getItem("user");
+
+         if (!isGuest && !user) {
+            // no access
+            window.location.href = "index.html";
+         }
+
+         function handleUpload(file) {
+            // Once uploaded successfully...
+            const firstTime = isGuest || !localStorage.getItem("seenPhonePrompt");
+            if (firstTime) {
+               localStorage.setItem("seenPhonePrompt", "true");
+               window.location.href = "phone-select.html";
+            } else {
+               // skip to results
+               window.location.href = "results.html";
+            }
+         }
+      </script>
+   </body>
+</html>

@@ -8,12 +8,28 @@ app = Flask(__name__)
 CORS(app)  # enables 
 
 UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER_TEMP = UPLOAD_FOLDER + '/temp'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(UPLOAD_FOLDER_TEMP, exist_ok=True)
 
 # @app.after_request
 # def add_headers(response):
 #    response.headers['Cache-Control'] = 'no-store'
 #    return response
+
+@app.route('/getScreenshot', methods=['POST'])
+def get_screenshot():
+   if 'video' not in request.files:
+      return jsonify({'message': 'No video file provided'}), 400
+   
+   video = request.files['video']
+   video_path = os.path.join(UPLOAD_FOLDER, video.filename)
+   video.save(video_path)
+
+   print(f'Video saved at {video_path}')
+   print("processing video...")
+   board = extract_board(video_path)
+   return jsonify({'message': board, 'file': video.filename}), 200
 
 @app.route('/upload', methods=['POST'])
 def upload_video():

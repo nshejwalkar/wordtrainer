@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Log In</title>
+</head>
+<body>
+  <h1>Log In</h1>
+  <form onsubmit="loginUser(event)">
+    <input type="text" placeholder="Username" id="username" required />
+    <input type="password" placeholder="Password" id="password" required />
+    <button type="submit">Log In</button>
+  </form>
+
+  <script>
+    function loginUser(event) {
+      event.preventDefault();
+      // placeholder authentication logic
+      const username = document.getElementById("username").value;
+      // Save to localStorage/sessionStorage for example
+      localStorage.setItem("user", username);
+      window.location.href = "home.html";
+    }
+  </script>
+</body>
+</html>

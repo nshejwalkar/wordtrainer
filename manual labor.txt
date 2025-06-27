@@ -1,0 +1,73 @@
+[245, 277, 294, 341, 425, 455, 509, 526, 546, 620, 653, 685, 773, ... 2024, 2077]
+
+actual/found-word, quality
+
+245/245-gin, good
+277/278-goon, good
+294/295-goo, fading in bg
+341/342-gown, good
+425/426-saw, good
+455/456-sawn, good
+509/509-sels, good
+526/526-sel, fading in background
+546/546-less, very slight fading
+620/619-puls, good
+653/652-pulses, good
+685/683-pulse, good
+773/771-dup, good
+1078-padding, good
+1132-pad, good
+1204-padi, good
+1267-had, good
+1315-hadding, good
+1422-lud, good
+1748-piddles, good
+1785-piddle, good
+1827-paddles, good
+1864-paddle, good
+1978-hid, good
+2027-gon, good
+2080-gong, good
+2192-won, good
+2545/2552-yow, BAD (WHITE BLOB IN MIDDLE)
+2593/2601-yows, BAD (WHITE BLOB WITH N IN MIDDLE)
+2613/2621-nows, BAD (WHITE BLOB IN MIDDLE)
+2628/2636-now, BAD (WHITE BLOB WITH N IN MIDDLE)
+2780/2789-oaves, good
+2867-goa, good
+2904-heaves, good
+2927-heave, good
+3007-eases, good
+3018/3026-ease, BAD (WHITE BLOB IN MIDDLE)
+3033/3041-eas, BAD (WHITE BLOB IN MIDDLE)
+3061/3069-easel, good
+3105-easles, good
+3189-easle
+3226-weasel, BAD (WHITE BLOB WITH W IN MIDDLE)
+3325-weasely, good
+3516-nowls, BAD (WHITE BLOB WITH N IN MIDDLE)
+3536-nowy, good
+3556/3566-owls, BAD (WHITE BLOB WITH OW IN MIDDLE)
+3572/3582-owl, BAD (WHITE BLOB WITH N IN MIDDLE)
+3674/3683-nowl, BAD (WHITE BLOB IN MIDDLE)
+3744-owly, good
+3778-gowls, good
+3795-gowl, good
+3948-owse, good
+4011-hows, good
+4030-how, good
+4147-hews, good
+4167-hew, good
+4219-noys, good
+4239-noy, good
+4325-din, good
+4471-ping, good
+4486-pin, very slight fading
+4511/4515-piny, good
+4659/4660-dah, good
+4796/4799-hading, good
+
+piddle twice (3614, 3617)	(3617 is correct)
+easle -> ease (6364)		(6462 is correct)
+then easle (6462)
+owly twice (7591, 7614)		(7591 is correct)

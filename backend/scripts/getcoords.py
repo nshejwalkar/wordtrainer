@@ -59,6 +59,6 @@ def get_roi_coordinates_from_video(video_path):
    return roi_coordinates
 
 # Example usage
-video_path = "./uploads/iphone12.mp4"
+video_path = "../uploads/iphone12.mp4"
 coordinates = get_roi_coordinates_from_video(video_path)
 # print("Selected coordinates:", coordinates)
