@@ -1,7 +1,9 @@
 import cv2, pytesseract
 import numpy as np
 import subprocess
-import os, glob
+import os, glob, torch
+import torch.nn as nn
+import torchvision.transforms as transforms
 
 # VERY hardcoded for now. works for my phone (iPhone 13), might work for others
 pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
@@ -12,6 +14,9 @@ sample_image = './uploads/IMG_6364.PNG'
 
 custom_config = '-l eng --psm 6 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ"'
 custom_config_words = '-l eng --psm 7 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+"'
+
+WEIGHTS   = 'board_cnn_100.pt'
+DEVICE    = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # need relatives. pixels never guaranteed to match
 MAGIC = {
@@ -197,6 +202,7 @@ def get_frame_with_start(video_path):
    # didnt find shit
    cap.release()
    return None
+
    
 def _split_into_tiles(board_roi, board_size):
    TARGET_SIZE = 90  # size of each tile after cropping and padding
@@ -227,7 +233,7 @@ def _split_into_tiles(board_roi, board_size):
                                        pad_x, TARGET_SIZE - cropped.shape[1] - pad_x,
                                        cv2.BORDER_CONSTANT, value=0)
             
-         print(f'area: {cropped.shape[0]*cropped.shape[1]}')
+         print(f'area: {padded.shape[0]*padded.shape[1]}')
          blur = cv2.bilateralFilter(cropped, 5, 50, 50)  # smooth the tile
 
          tiles.append(padded)  # add to tiles
@@ -235,26 +241,51 @@ def _split_into_tiles(board_roi, board_size):
    return tiles
 
 def _get_letter_from_tile(tile):
-   TEMPLATE_DIR = 'templates/clean'  # directory with cleaned templates
-   min_score = float('inf')
-   best_match = None
+   transform = transforms.Compose([
+      transforms.ToPILImage(),
+      transforms.Grayscale(num_output_channels=1),
+      transforms.ToTensor(),
+      transforms.Normalize(mean=[0.5], std=[0.5])
+   ])
 
-   # iterate through all templates in the directory
-   for fname in os.listdir(TEMPLATE_DIR):
-      template = cv2.imread(os.path.join(TEMPLATE_DIR, fname), cv2.IMREAD_GRAYSCALE)  # need grayscale
+   class TinyCNN(nn.Module):
+      def __init__(self, n_classes):
+         super().__init__()
+         self.features = nn.Sequential(
+            nn.Conv2d(1, 16, 3, padding=1), nn.ReLU(),
+            nn.MaxPool2d(2),                # 90 → 45
+            nn.Conv2d(16, 32, 3, padding=1), nn.ReLU(),
+            nn.MaxPool2d(2),                # 45 → 22
+            nn.Conv2d(32, 64, 3, padding=1), nn.ReLU()
+         )
+         self.pool = nn.AdaptiveAvgPool2d(1)  # Global Average Pool  → (64,1,1)
+         self.classifier = nn.Linear(64, n_classes)
 
-      result = cv2.matchTemplate(tile, template, cv2.TM_SQDIFF_NORMED)  # lower is better
-      minval, _, _, _ = cv2.minMaxLoc(result)
-      
-      # print(f"Template {fname}: score = {minval}")
+      def forward(self, x):
+         x = self.features(x)
+         x = self.pool(x).flatten(1)
+         return self.classifier(x)
 
-      if minval < min_score:
-         min_score = minval
-         best_match = fname[0].upper()
+   net = TinyCNN(26).to(DEVICE)
+   net.load_state_dict(torch.load(WEIGHTS, map_location=DEVICE))
 
-   # print(f"Best match: {best_match} with score {min_score}")
+   with torch.no_grad():
+      if len(tile.shape) == 3:
+         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2GRAY)
 
-   return best_match
+      # Transform to tensor
+      tensor = transform(tile).unsqueeze(0).to(DEVICE)  # shape (1, 1, 90, 90)
+
+      # Run inference
+      logits = net(tensor)
+      # pred_class = logits.argmax(dim=1).item()
+      probs = torch.softmax(logits, dim=1)
+      conf, pred_class = probs.max(dim=1)
+      pred_letter = chr(ord('A') + pred_class.item())
+      print(f'LETTER: {pred_letter}, CONF: {conf.item():.3f}')
+
+      return pred_letter
+
 
 # extracts the board from the video and returns it as a matrix of characters
 def extract_board(video_path):
@@ -270,10 +301,10 @@ def extract_board(video_path):
       cv2.imshow(f'tile {i}', tile)
       cv2.waitKey(0)
       cv2.destroyAllWindows()
-      # letter = _get_letter_from_tile(tile)
-      # print(letter, end='', flush=True)
-      # if (i + 1) % 5 == 0:
-      #    print(flush=True)
+      letter = _get_letter_from_tile(tile)
+      print(letter, end='', flush=True)
+      if (i + 1) % 5 == 0:
+         print(flush=True)
    
    # turn to a matrix
    # send = text.split('\n')

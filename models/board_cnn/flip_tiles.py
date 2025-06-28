@@ -16,6 +16,7 @@ for tile in os.listdir(dir_path):
       cv2.imwrite(flipped_tile_path, flipped_img)
       print(f"Flipped tile: {flipped_tile_path}")
 
+## delete augmented tiles
 # for i in range(26):
 #    letter = chr(ord('A')+i)  # A-Z
 #    letter_dir = f'{TRAIN_LOC}/{letter}'

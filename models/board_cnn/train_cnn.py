@@ -30,7 +30,9 @@ DATA_DIR        = '../../models_data/train'          # root with A..Z/
 WEIGHTS_OUT     = 'board_cnn.pt'                     # saved in same folder as script
 BATCH_SIZE      = 32
 EPOCHS          = 20
-LR              = 1e-3
+LR              = 1e-2
+SCHED_FACTOR    = 0.3
+PATIENCE        = 2
 EARLY_STOP_PATIENCE = 8                              # epochs w/o val-loss improvement
 IMG_SIZE        = 90                                 # tiles are 90×90
 DEVICE          = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -44,12 +46,19 @@ transform = Compose([
    Normalize(mean=[0.5], std=[0.5])     # map white≈1 → ~1, black≈0 → ~-1
 ])
 
-dataset = ImageFolder(DATA_DIR, transform=transform)
+class ImageFolderNoUnsure(ImageFolder):
+   def find_classes(self, directory):
+      classes = [d.name for d in os.scandir(directory) if d.is_dir() and d.name != '_UNSURE']
+      classes.sort()
+      class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+      return classes, class_to_idx
+
+dataset = ImageFolderNoUnsure(DATA_DIR, transform=transform)
 print("Classes:", dataset.classes)
 print("Transform: ", dataset.transform)
 num_classes = len(dataset.classes)                 # should be 26
 print(f"Loaded {len(dataset)} samples, {num_classes} classes from {DATA_DIR}")
-print("single image shape: ", cv2.imread(dataset.samples[0][0]).shape)
+
 
 # train/val split 90/10
 val_size = int(0.1 * len(dataset))
@@ -59,8 +68,10 @@ train_ds, val_ds = random_split(dataset, [train_size, val_size],
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
 val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
+tiny_loader = DataLoader(torch.utils.data.Subset(train_ds, list(range(64))), batch_size=32)
 # subset = torch.utils.data.Subset(dataset, list(range(64)))
 # loader = DataLoader(subset, batch_size=64)
+
 
 img, label = dataset[0]
 print("Shape:", img.shape)
@@ -72,6 +83,15 @@ print("Pixel min/max:", img.min().item(), img.max().item())
 # grid = torchvision.utils.make_grid(images[:8], nrow=4, normalize=True)
 # plt.imshow(grid.permute(1, 2, 0))
 # plt.title(f"Labels: {[dataset.classes[l] for l in labels[:8]]}")
+# plt.show()
+
+# for i in range(8):
+#    img, label = tiny_loader.dataset[i]
+#    plt.subplot(2, 4, i+1)
+#    plt.imshow(img[0], cmap='gray')  # single channel
+#    plt.title(dataset.classes[label])
+#    plt.axis('off')
+# plt.tight_layout()
 # plt.show()
 
 
@@ -100,6 +120,8 @@ model = TinyCNN(num_classes).to(DEVICE)
 print(f"Model params: {sum(p.numel() for p in model.parameters()):,}")
 
 optimizer = optim.Adam(model.parameters(), lr=LR)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+              optimizer, factor=SCHED_FACTOR, patience=PATIENCE)
 criterion = nn.CrossEntropyLoss()
 scaler = torch.amp.GradScaler('cuda')  # mixed precision
 
@@ -111,27 +133,33 @@ def run_epoch(loader, train=True):
    model.train(train)
    running_loss, correct, total = 0.0, 0, 0
    loop = tqdm(loader, leave=False)
-   with torch.amp.autocast('cuda'):
-      for inputs, labels in loop:
-         inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-         if train:
-            optimizer.zero_grad(set_to_none=True)
-         outputs = model(inputs)
-         loss = criterion(outputs, labels)
-         if train:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-         preds = outputs.argmax(1)
-         running_loss += loss.item() * inputs.size(0)
-         correct += (preds == labels).sum().item()
-         total += labels.size(0)
-         loop.set_description('train' if train else 'val ')
-         loop.set_postfix(loss=loss.item())
+   
+   for inputs, labels in loop:
+      inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+      # with torch.amp.autocast('cuda'):
+      if train:
+         optimizer.zero_grad(set_to_none=True)
+      outputs = model(inputs)
+      # print(outputs.shape)
+      loss = criterion(outputs, labels)
+      if train:
+         scaler.scale(loss).backward()
+         scaler.step(optimizer)
+         scaler.update()
+      preds = outputs.argmax(1)
+      running_loss += loss.item() * inputs.size(0)
+      correct += (preds == labels).sum().item()
+      total += labels.size(0)
+      loop.set_description('train' if train else 'val ')
+      loop.set_postfix(loss=loss.item())
    return running_loss / total, correct / total
 
 best_val_loss = float('inf')
 patience = EARLY_STOP_PATIENCE
+
+# for epoch in range(50):
+#    loss, acc = run_epoch(tiny_loader, train=True)
+#    print(f"[tiny] epoch {epoch}  loss={loss:.4f}  acc={acc:.3f}")
 
 for epoch in range(1, EPOCHS+1):
    print(f"\nEpoch {epoch}/{EPOCHS}")

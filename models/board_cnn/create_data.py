@@ -19,7 +19,7 @@ REPORT_PATH     = '../../models_data/augmentation_report.csv'
 
 TEMPLATE_SIZE   = 90     # every tile becomes 90×90 px
 BOARD_SIZE      = 5      # Word-Hunt board is always 5×5
-AUGMENT_TARGET  = 100    # desired tiles / class (after augment)
+AUGMENT_TARGET  = 500    # desired tiles / class (after augment)
 
 CONF_THRESH     = 60     # Tesseract confidence cut-off (< goes to _UNSURE)
 
@@ -129,17 +129,17 @@ def autosort_tiles():
 # phase: augment (unchanged except it now assumes folders exist)
 # ------------------------------------------------------------
 def random_aug(tile):
-   if random.random()<THICKEN_P:
-      tile=cv2.dilate(tile,np.ones((3,3),np.uint8),1)
-   if random.random()<THIN_P:
-      tile=cv2.erode(tile,np.ones((3,3),np.uint8),1)
-   if random.random()<BLUR_P:
-      tile=cv2.GaussianBlur(tile,(3,3),0)
-   if random.random()<BC_P:
-      tile=cv2.convertScaleAbs(tile,alpha=random.uniform(0.8,1.2),beta=random.randint(-15,15))
-   if random.random()<NOISE_P:
-      n=np.random.normal(0,8,tile.shape).astype(np.int16)
-      tile=np.clip(tile.astype(np.int16)+n,0,255).astype(np.uint8)
+   # if random.random()<THICKEN_P:
+   #    tile=cv2.dilate(tile,np.ones((3,3),np.uint8),1)
+   # if random.random()<THIN_P:
+   #    tile=cv2.erode(tile,np.ones((3,3),np.uint8),1)
+   # if random.random()<BLUR_P:
+   #    tile=cv2.GaussianBlur(tile,(3,3),0)
+   # if random.random()<BC_P:
+   #    tile=cv2.convertScaleAbs(tile,alpha=random.uniform(0.8,1.2),beta=random.randint(-15,15))
+   # if random.random()<NOISE_P:
+   #    n=np.random.normal(0,8,tile.shape).astype(np.int16)
+   #    tile=np.clip(tile.astype(np.int16)+n,0,255).astype(np.uint8)
    return tile
 
 def augment():
@@ -156,7 +156,7 @@ def augment():
             aug=random_aug(src)
             name=f'{L}_{len(imgs):04d}_augmented.png'
             cv2.imwrite(os.path.join(cdir,name),aug)
-            imgs.append(name); created+=1; pb.update(1)
+            imgs.append(os.path.join(cdir, name)); created+=1; pb.update(1)
       rows.append([L,orig,created,len(imgs)])
    with open(REPORT_PATH,'w',newline='') as f: csv.writer(f).writerows(rows)
    print(f'✅ augment done → {REPORT_PATH}')
