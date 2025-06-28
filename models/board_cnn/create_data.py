@@ -33,9 +33,9 @@ MAGIC = {   # relative board ROI for iPhone-13 screenshots
 }
 
 # probability of each augmentation
-BLUR_P = THICKEN_P = THIN_P = 0.40
-NOISE_P = 0.30
-BC_P    = 0.40
+BC_P = 0.40
+THICKEN_P = THIN_P = NOISE_P = 0.30
+BLUR_P = 0.20
 
 pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
 TESS_CONFIG = '-l eng --psm 10 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -129,17 +129,17 @@ def autosort_tiles():
 # phase: augment (unchanged except it now assumes folders exist)
 # ------------------------------------------------------------
 def random_aug(tile):
-   # if random.random()<THICKEN_P:
-   #    tile=cv2.dilate(tile,np.ones((3,3),np.uint8),1)
-   # if random.random()<THIN_P:
-   #    tile=cv2.erode(tile,np.ones((3,3),np.uint8),1)
-   # if random.random()<BLUR_P:
-   #    tile=cv2.GaussianBlur(tile,(3,3),0)
-   # if random.random()<BC_P:
-   #    tile=cv2.convertScaleAbs(tile,alpha=random.uniform(0.8,1.2),beta=random.randint(-15,15))
-   # if random.random()<NOISE_P:
-   #    n=np.random.normal(0,8,tile.shape).astype(np.int16)
-   #    tile=np.clip(tile.astype(np.int16)+n,0,255).astype(np.uint8)
+   if random.random()<THICKEN_P:
+      tile=cv2.dilate(tile,np.ones((3,3),np.uint8),1)
+   if random.random()<THIN_P:
+      tile=cv2.erode(tile,np.ones((3,3),np.uint8),1)
+   if random.random()<BLUR_P:
+      tile=cv2.GaussianBlur(tile,(3,3),0)
+   if random.random()<BC_P:
+      tile=cv2.convertScaleAbs(tile,alpha=random.uniform(0.9,1.1),beta=random.randint(-10,10))
+   if random.random()<NOISE_P:
+      n=np.random.normal(0,3,tile.shape).astype(np.int16)
+      tile=np.clip(tile.astype(np.int16)+n,0,255).astype(np.uint8)
    return tile
 
 def augment():

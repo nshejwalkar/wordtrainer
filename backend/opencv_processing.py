@@ -15,7 +15,7 @@ sample_image = './uploads/IMG_6364.PNG'
 custom_config = '-l eng --psm 6 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ"'
 custom_config_words = '-l eng --psm 7 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+"'
 
-WEIGHTS   = 'board_cnn_100.pt'
+WEIGHTS   = 'board_cnn_full.pt'
 DEVICE    = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # need relatives. pixels never guaranteed to match
@@ -282,7 +282,7 @@ def _get_letter_from_tile(tile):
       probs = torch.softmax(logits, dim=1)
       conf, pred_class = probs.max(dim=1)
       pred_letter = chr(ord('A') + pred_class.item())
-      print(f'LETTER: {pred_letter}, CONF: {conf.item():.3f}')
+      # print(f'LETTER: {pred_letter}, CONF: {conf.item():.3f}')
 
       return pred_letter
 
