@@ -1,3 +1,7 @@
+import time
+print("Booting...")
+t0 = time.time()
+
 import cv2, pytesseract
 import numpy as np
 import subprocess
@@ -5,17 +9,20 @@ import os, glob, torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 
+print("Done with imports:", time.time() - t0)
+
+
 # VERY hardcoded for now. works for my phone (iPhone 13), might work for others
 pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
-sample_video = './uploads/iphone12.mp4'
+sample_video = './uploads/ScreenRecording_06-15-2025 16-33-15_1.mp4'
 # sample_video = './uploads/ScreenRecording_06-23-2025 19-51-01_1.mov'
 sample_video_120 = './uploads/iphone12_120.mp4'
-sample_image = './uploads/IMG_6364.PNG'
+sample_image = os.path.abspath('../models_data/pics/IMG_6358.PNG')
 
 custom_config = '-l eng --psm 6 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ"'
 custom_config_words = '-l eng --psm 7 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+"'
 
-WEIGHTS   = 'board_cnn_full.pt'
+WEIGHTS   = './model_weights/board_cnn_4L.pt'
 DEVICE    = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # need relatives. pixels never guaranteed to match
@@ -48,6 +55,7 @@ def transcode_to_120fps(video_path, output_path):
 
 # converts relative coordinates to pixel coordinates based on video resolution
 # returns a dictionary with the same structure as magic, but with absolute pixel values
+# ONLY for videos. INDETERMINATE BEHAVIOR FOR IMAGES
 def _magic_to_pixels(video_path):
    cap = cv2.VideoCapture(video_path)
    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -64,9 +72,22 @@ def _magic_to_pixels(video_path):
       #       pixels[key][k] = int(v*height)
    return pixels
 
+# this is for images
+def _magic_to_pixels_image(image_path):
+   img = cv2.imread(image_path)
+   height, width = img.shape[:2]
+   print(f"Image dimensions: {height}x{width}")
+   
+   pixels = {}
+   for key in MAGIC.keys():
+      pixels[key] = {k:(int(v*width) if k.startswith('x') else int(v*height)) for k,v in MAGIC[key].items()}  # ???
+
+   return pixels
+
 # extracts the region of interest (ROI) from the frame based on the magic coordinates
 # interest is a key in the magic dictionary: 'time', 'board', 'word_count', 'score'
-def _get_roi(frame, magic_pix, interest):
+# if the roi.shape is returning (0,0,3) or 0x0: THE PROBLEM IS IN _MAGIC_TO_PIXELS() NOT HERE
+def _get_roi(frame: np.ndarray, magic_pix, interest):
    print(frame.shape)
    interest_subdict = magic_pix[interest]
    ytop = interest_subdict['ytop']
@@ -86,18 +107,44 @@ def _get_frame(video_path, number):
    return frame
 
 # applies preprocessing to the ROI to prepare it for OCR
-def _apply_preprocessing_board(roi):  # somehow this works 
+def _apply_preprocessing_board(roi, modality='video', shape=(1920, 888, 3)):  # somehow this works 
+   cv2.imshow('roi', roi)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
+   # resize image to 1920x888
+   height, width = shape[0], shape[1]
+   print(f'height is {height}')
+   print(f'width is {width}')
+   print(f'fx is {888/width}')
+   print(f'fy is {1920/height}')
+   resized = cv2.resize(roi, None, fx=888/width, fy=1920/height, interpolation=cv2.INTER_AREA)
+   print(f'new shape is {resized.shape}')
+   cv2.imshow('roi', resized)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
    # make gray
-   gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+   gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
+   cv2.imshow('gray', gray)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
    equalized = cv2.equalizeHist(gray)
+   cv2.imshow('equalized', equalized)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
 
-   # binary threshold: anything below 21 becomes white
-   _, binary = cv2.threshold(equalized, 21, 255, cv2.THRESH_BINARY_INV)
-   th2 = cv2.adaptiveThreshold(equalized, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11,2)
+   # binary threshold: anything less than 21 becomes white. 21-255 becomes black
+   if modality == 'video':
+      _, binary = cv2.threshold(equalized, 21, 255, cv2.THRESH_BINARY_INV)
+   else:
+      _, binary = cv2.threshold(equalized, 5, 255, cv2.THRESH_BINARY_INV)
+   th2 = cv2.adaptiveThreshold(equalized, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 0)
 
    # close letters to get rid of artifacts
    kernel = np.ones((5,5),np.uint8)
    closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+   cv2.imshow('closing', closing)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
 
    # contours
    closing_contours = closing.copy()
@@ -105,11 +152,15 @@ def _apply_preprocessing_board(roi):  # somehow this works
    contours = items[0] if len(items) == 2 else items[1]
    cv2.drawContours(closing_contours, contours, -1, (0,0,255), 2)
 
+   cv2.imshow('closing_contours', closing_contours)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
+
    # want to isolate black letters
-   lower = np.array([0,0,0])
-   upper = np.array([180,100,100])
+   # lower = np.array([0,0,0])
+   # upper = np.array([180,100,100])
    # mask = cv2.inRange(hsv, lower, upper)
-   print(closing_contours[:500])
+   # print(closing_contours[:500])
    return closing_contours
 
 
@@ -256,10 +307,11 @@ def _get_letter_from_tile(tile):
             nn.MaxPool2d(2),                # 90 → 45
             nn.Conv2d(16, 32, 3, padding=1), nn.ReLU(),
             nn.MaxPool2d(2),                # 45 → 22
-            nn.Conv2d(32, 64, 3, padding=1), nn.ReLU()
+            nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(),
+            nn.Conv2d(64, 128, 3, padding=1), nn.ReLU()
          )
          self.pool = nn.AdaptiveAvgPool2d(1)  # Global Average Pool  → (64,1,1)
-         self.classifier = nn.Linear(64, n_classes)
+         self.classifier = nn.Linear(128, n_classes)
 
       def forward(self, x):
          x = self.features(x)
@@ -292,6 +344,9 @@ def extract_board(video_path):
    frame = _get_frame(video_path, 160)  # starts at the 160th frame, around 2 seconds in. change later
    magic_pix = _magic_to_pixels(video_path)
    board_roi = _get_roi(frame, magic_pix, 'board')
+   cv2.imshow('board roi raw', board_roi)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
    board_roi = _apply_preprocessing_board(board_roi)
    cv2.imshow('board roi', board_roi)
    cv2.waitKey(0)
@@ -314,18 +369,25 @@ def extract_board(video_path):
    # return send
 
 def extract_board_from_image(image_path):
-   print(os.path.exists('./uploads/IMG_6364.PNG'))
-   for f in glob.glob('./uploads/*.PNG'):
-      img = cv2.imread(f)
-      print(f"{f}: {'OK' if img is not None else 'Failed'}")
    frame = cv2.imread(image_path)
-   magic_pix = _magic_to_pixels(image_path)
-   print(magic_pix)
+   magic_pix = _magic_to_pixels_image(image_path)
    board_roi = _get_roi(frame, magic_pix, 'board')
-   if board_roi is None:
-      raise ValueError("Failed to extract board ROI from the image.")
-   board_roi = _apply_preprocessing_board(board_roi)
+   cv2.imshow('board roi raw', board_roi)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
+   board_roi = _apply_preprocessing_board(board_roi, modality='image', shape=frame.shape)
    cv2.imshow('board roi', board_roi)
+
+   tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
+   for i, tile in enumerate(tiles):
+      # cv2.imshow(f'tile {i}', tile)
+      # cv2.waitKey(0)
+      # cv2.destroyAllWindows()
+      letter = _get_letter_from_tile(tile)
+      print(letter, end='', flush=True)
+      if (i + 1) % 5 == 0:
+         print(flush=True)
+
    cv2.waitKey(0)
    cv2.destroyAllWindows()
 
@@ -484,14 +546,19 @@ if __name__ == '__main__':
    # seek_thru_video(sample_video_120, start_frame=0)
    # transcode_to_120fps(sample_video, sample_video_120)
    # extract_words_found(sample_video_120)
-   extract_board(sample_video)
-   # extract_board_from_image(sample_image)
-   # frame = _get_frame(sample_video, 500)
-   # frame = _get_frame(sample_video_120, 6132)
-   # roi = _get_roi(frame, _magic_to_pixels(sample_video), 'words')
-   # roi = (_apply_preprocessing_word_count(roi)*255).astype(np.uint8)  # convert to uint8 for pytesseract
-   # cv2.imshow('words roi', roi)
-   # cv2.waitKey(0)
-   # cv2.destroyAllWindows()
+   # extract_board(sample_video)
+
+   images = [os.path.abspath(os.path.join('../models_data/pics',file)) for file in os.listdir('../models_data/pics') if int(file.split('.')[0].split('_')[-1])>6370]
+   print(images)
+   for image in images:
+      extract_board_from_image(image)
+
+   # absroot = os.path.abspath('../models_data/pics')
+   # for impath in os.listdir(absroot):
+   #    impath = os.path.join(absroot, impath)
+   #    print(impath)
+   #    extract_board_from_image(impath)
+
+   
 
 # cpp errors given by poor error handling in cv2. make sure file path is full.

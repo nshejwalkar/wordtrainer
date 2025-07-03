@@ -25,3 +25,21 @@ scraping words:
 
 future:
 - standardize video for all iphone sr resolutions 
+
+
+Troubles with ocr:
+reading the board is tough. i tried tesseract and it was unpredictably messing up on inputs that should have been obvious. fine, but this task is critical for everything else to work, it needs to be 100% accurate.
+I tried template matching, but realized that was very very sensitive to different scaling, noise, etc.
+decided to train my own cnn. used a small 3 layer, 26k param architecture that gpt gave me, and set up a training folder with 26 folders, one for each letter.
+to create the data set, use create_augments:
+- took a lot of pictures of boards, around 20 or so
+- ran the same cropping, image filtering pipeline as I did for actual inference (grayscale, binary filtering, dilating, etc.) 
+   - ended up changing some things: i didnt realize that videos and images have different lighting conditions - quick and dirty fix, just a different threshold for each
+   - for different resolutions (but same aspect ratio), you need to resize down/up to 90x90
+- autosorted the cropped tiles into the 26 folders based on tesseract. if lower than a certain confidence level, i manually sorted those tile myself.
+- augmented first just based on random dilation, erosion, blur and brightness+contrast.
+- i realized its much much better to lock down the process by controlling the seed and tracking checkpoint pts.
+- resulted in much faster than tesseract, but probably worse on outputs. tuned augmentation to 750 tiles per letter and added slight zooms
+- trying different seeds is actually a strat. should jump to 97% ish for this easy of a task after an epoch.
+- was great but still messing up W and H for some odd reason. i didnt want to change the data augmentation any more, so finetuning seemed like a stretch.
+- simply added a layer (26k -> 100k) and it works fine as of now.

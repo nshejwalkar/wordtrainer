@@ -8,7 +8,8 @@
 #  • 3-space indentation everywhere (PEP-8-ish but narrower)
 # =============================================================
 
-import os, json, time, random, argparse, cv2
+import glob
+import os, random, cv2
 from pathlib import Path
 
 from matplotlib import pyplot as plt
@@ -21,6 +22,7 @@ from torchvision.datasets import ImageFolder
 from torchvision.transforms import ToTensor, Normalize, Compose
 from torchvision import transforms
 from tqdm import tqdm
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
 # -------------------------------------------------------------
@@ -33,9 +35,16 @@ EPOCHS          = 20
 LR              = 1e-2
 SCHED_FACTOR    = 0.3
 PATIENCE        = 2
-EARLY_STOP_PATIENCE = 8                              # epochs w/o val-loss improvement
+EARLY_STOP_PATIENCE = 3                              # epochs w/o val-loss improvement
 IMG_SIZE        = 90                                 # tiles are 90×90
 DEVICE          = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+SEED = 21  # Pick any integer
+random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 # -------------------------------------------------------------
 # Dataset & transforms
@@ -106,10 +115,12 @@ class TinyCNN(nn.Module):
          nn.MaxPool2d(2),                # 90 → 45
          nn.Conv2d(16, 32, 3, padding=1), nn.ReLU(),
          nn.MaxPool2d(2),                # 45 → 22
-         nn.Conv2d(32, 64, 3, padding=1), nn.ReLU()
+         nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(),
+         nn.Conv2d(64, 128, 3, padding=1), nn.ReLU()
+         # still → (128, 22, 22) before pooling
       )
       self.pool = nn.AdaptiveAvgPool2d(1)  # Global Average Pool  → (64,1,1)
-      self.classifier = nn.Linear(64, n_classes)
+      self.classifier = nn.Linear(128, n_classes)
 
    def forward(self, x):
       x = self.features(x)
@@ -122,12 +133,32 @@ print(f"Model params: {sum(p.numel() for p in model.parameters()):,}")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
               optimizer, factor=SCHED_FACTOR, patience=PATIENCE)
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)  # very light smoothing (avoid one-hot -> turns them soft)
 scaler = torch.amp.GradScaler('cuda')  # mixed precision
 
 # -------------------------------------------------------------
 # Training helpers
 # -------------------------------------------------------------
+
+def plot_confusion_matrix(model, loader, class_names):
+   model.eval()
+   all_preds, all_labels = [], []
+   with torch.no_grad():
+      for inputs, labels in loader:
+         inputs = inputs.to(DEVICE)
+         outputs = model(inputs)
+         preds = outputs.argmax(1).cpu().numpy()
+         all_preds.extend(preds)
+         all_labels.extend(labels.numpy())
+
+   cm = confusion_matrix(all_labels, all_preds)
+   disp = ConfusionMatrixDisplay(cm, display_labels=class_names)
+   fig, ax = plt.subplots(figsize=(10, 10))
+   disp.plot(ax=ax, cmap='Blues', colorbar=False)
+   plt.title("Validation Confusion Matrix")
+   plt.xticks(rotation=45)
+   plt.tight_layout()
+   plt.show()
 
 def run_epoch(loader, train=True):
    model.train(train)
@@ -152,6 +183,7 @@ def run_epoch(loader, train=True):
       total += labels.size(0)
       loop.set_description('train' if train else 'val ')
       loop.set_postfix(loss=loss.item())
+
    return running_loss / total, correct / total
 
 best_val_loss = float('inf')
@@ -161,30 +193,63 @@ patience = EARLY_STOP_PATIENCE
 #    loss, acc = run_epoch(tiny_loader, train=True)
 #    print(f"[tiny] epoch {epoch}  loss={loss:.4f}  acc={acc:.3f}")
 
-for epoch in range(1, EPOCHS+1):
-   print(f"\nEpoch {epoch}/{EPOCHS}")
-   train_loss, train_acc = run_epoch(train_loader, train=True)
-   with torch.no_grad():
-      val_loss, val_acc = run_epoch(val_loader, train=False)
+def full_train():
+   global SEED  # made this global to avoid scope error
+   print(f'DEVICE is {DEVICE}')
+   best_val_loss = float('inf')
+   # did we already start training before?
+   start = 1
+   pt_files = glob.glob('./checkpoints/checkpoint_epoch_*.pt')
+   if pt_files:
+      latest = max(pt_files, key=lambda f: int(f.split('.')[-2].split('_')[-1]))
+      checkpoint = torch.load(latest)
+      print(checkpoint)
+      model.load_state_dict(checkpoint['model_state_dict'])
+      optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+      start = checkpoint['epoch'] + 1
+      print(f"starting at {start}")
+      # SEED = checkpoint['seed']
 
-   print(f"  train-loss {train_loss:.4f}  acc {train_acc:.3f}  |  "
-         f"val-loss {val_loss:.4f}  acc {val_acc:.3f}")
+   for epoch in range(start, EPOCHS+1):
+      print(f"\nEpoch {epoch}/{EPOCHS}")
+      train_loss, train_acc = run_epoch(train_loader, train=True)
+      with torch.no_grad():
+         val_loss, val_acc = run_epoch(val_loader, train=False)
 
-   # Early stopping & checkpoint
-   if val_loss < best_val_loss - 1e-4:
-      best_val_loss = val_loss
-      patience = EARLY_STOP_PATIENCE
-      torch.save(model.state_dict(), WEIGHTS_OUT)
-      print(f"  ✅ Saved best model to {WEIGHTS_OUT}")
-   else:
-      patience -= 1
-      if patience == 0:
-         print("  🛑 Early stopping (no val improvement)")
-         break
+      print(f"  train-loss {train_loss:.4f}  acc {train_acc:.3f}  |  "
+            f"val-loss {val_loss:.4f}  acc {val_acc:.3f}")
+
+      # save model weights every epoch
+      torch.save({
+         'epoch': epoch,
+         'model_state_dict': model.state_dict(),
+         'optimizer_state_dict': optimizer.state_dict(),
+         'seed': SEED,
+      }, f'./checkpoints/checkpoint_epoch_{epoch}.pt')
+
+      # Early stopping & checkpoint
+      if val_loss < best_val_loss - 1e-4:
+         best_val_loss = val_loss
+         patience = EARLY_STOP_PATIENCE
+         torch.save(model.state_dict(), WEIGHTS_OUT)
+         print(f"  ✅ Saved best model to {WEIGHTS_OUT}")
+      else:
+         patience -= 1
+         if patience == 0:
+            print("  🛑 Early stopping (no val improvement)")
+            break
+
+full_train()
 
 print("\nTraining complete.")
 print(f"Best validation loss: {best_val_loss:.4f}")
 print(f"Weights saved to: {Path(WEIGHTS_OUT).resolve()}")
+print("About to plot confusion matrix:")
+
+# checkpoint = torch.load('./checkpoints/checkpoint_epoch_17.pt')
+# model.load_state_dict(checkpoint['model_state_dict'])
+# optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+plot_confusion_matrix(model, val_loader, dataset.classes)
 
 # -------------------------------------------------------------
 # Inference helper (optional import-able)
