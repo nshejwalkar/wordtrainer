@@ -22,7 +22,7 @@ sample_image = os.path.abspath('../models_data/pics/IMG_6358.PNG')
 custom_config = '-l eng --psm 6 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ"'
 custom_config_words = '-l eng --psm 7 -c tessedit_char_whitelist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+"'
 
-WEIGHTS   = './model_weights/board_cnn_4L.pt'
+WEIGHTS   = './model_weights/board_cnn_4L_2.pt'
 DEVICE    = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # need relatives. pixels never guaranteed to match
@@ -145,7 +145,7 @@ def _apply_preprocessing_board(roi, modality='video', shape=(1920, 888, 3)):  # 
    cv2.imshow('closing', closing)
    cv2.waitKey(0)
    cv2.destroyAllWindows()
-
+ 
    # contours
    closing_contours = closing.copy()
    items = cv2.findContours(closing, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -266,14 +266,34 @@ def _split_into_tiles(board_roi, board_size):
          x_start = col * tile_w
          y_start = row * tile_h
          tile = board_roi[y_start:y_start+tile_h, x_start:x_start+tile_w]
+         # cv2.imshow('tile pre-crop', tile)
+         # cv2.waitKey(0)
+         # cv2.destroyAllWindows()
 
-         # same exact thing as in template cleaning: bounding box + cropping
-         _, thresh = cv2.threshold(tile, 0, 255, cv2.THRESH_BINARY)
-         coords = cv2.findNonZero(thresh)
+         # same exact thing as in template cleaning: bounding box + cropping (DOESNT WORK WITH ARTIFACTS)
+         # _, thresh = cv2.threshold(tile, 0, 255, cv2.THRESH_BINARY)
+         # coords = cv2.findNonZero(thresh)
+         _, bw  = cv2.threshold(tile, 0, 255, cv2.THRESH_BINARY)
+         cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+         coords = max(cnts, key=cv2.contourArea)  # choose contour with the largest area (NO MORE ARTIFACTS!)
          x, y, w, h = cv2.boundingRect(coords)
 
-         # resize to 40x40 (need to crop, not pad)
+         # check what this shit above actually does?
+         if len(tile.shape) == 2:  # grayscale → convert to BGR
+            tile_vis = cv2.cvtColor(tile, cv2.COLOR_GRAY2BGR)
+         else:
+            tile_vis = tile.copy()
+         cv2.rectangle(tile_vis, (x, y), (x + w, y + h), (0, 255, 0), 2)
+         # cv2.imshow("Bounding Box", tile_vis)
+         # cv2.waitKey(0)
+         # cv2.destroyAllWindows()
+
+         # resize to 90x90 (need to crop, not pad)
          cropped = tile[y:y+h, x:x+w]
+
+         # cv2.imshow('tile post-crop', cropped)
+         # cv2.waitKey(0)
+         # cv2.destroyAllWindows()
          
          if cropped.shape[0] > TARGET_SIZE or cropped.shape[1] > TARGET_SIZE:
             padded = cv2.resize(cropped, (TARGET_SIZE, TARGET_SIZE))
@@ -285,6 +305,11 @@ def _split_into_tiles(board_roi, board_size):
                                        cv2.BORDER_CONSTANT, value=0)
             
          print(f'area: {padded.shape[0]*padded.shape[1]}')
+
+         # cv2.imshow('tile padded', padded)
+         # cv2.waitKey(0)
+         # cv2.destroyAllWindows()
+
          blur = cv2.bilateralFilter(cropped, 5, 50, 50)  # smooth the tile
 
          tiles.append(padded)  # add to tiles
@@ -347,10 +372,11 @@ def extract_board(video_path):
    cv2.imshow('board roi raw', board_roi)
    cv2.waitKey(0)
    cv2.destroyAllWindows()
-   board_roi = _apply_preprocessing_board(board_roi)
+   board_roi = _apply_preprocessing_board(board_roi, shape=frame.shape)
    cv2.imshow('board roi', board_roi)
    cv2.waitKey(0)
    cv2.destroyAllWindows()
+   
    tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
    for i, tile in enumerate(tiles):
       cv2.imshow(f'tile {i}', tile)
@@ -361,6 +387,9 @@ def extract_board(video_path):
       if (i + 1) % 5 == 0:
          print(flush=True)
    
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
+
    # turn to a matrix
    # send = text.split('\n')
    # for i in range(len(send)):
@@ -377,19 +406,20 @@ def extract_board_from_image(image_path):
    cv2.destroyAllWindows()
    board_roi = _apply_preprocessing_board(board_roi, modality='image', shape=frame.shape)
    cv2.imshow('board roi', board_roi)
+   cv2.waitKey(0)
+   cv2.destroyAllWindows()
 
    tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
    for i, tile in enumerate(tiles):
-      # cv2.imshow(f'tile {i}', tile)
-      # cv2.waitKey(0)
-      # cv2.destroyAllWindows()
+      cv2.imshow(f'tile {i}', tile)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
       letter = _get_letter_from_tile(tile)
       print(letter, end='', flush=True)
       if (i + 1) % 5 == 0:
          print(flush=True)
 
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   
 
    
 def _apply_preprocessing_word_count(roi):
@@ -548,10 +578,10 @@ if __name__ == '__main__':
    # extract_words_found(sample_video_120)
    # extract_board(sample_video)
 
-   images = [os.path.abspath(os.path.join('../models_data/pics',file)) for file in os.listdir('../models_data/pics') if int(file.split('.')[0].split('_')[-1])>6370]
-   print(images)
-   for image in images:
-      extract_board_from_image(image)
+   videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
+   print(videos)
+   for video in videos[-1:]:
+      extract_board(video)
 
    # absroot = os.path.abspath('../models_data/pics')
    # for impath in os.listdir(absroot):

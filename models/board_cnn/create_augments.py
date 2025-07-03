@@ -33,9 +33,10 @@ MAGIC = {   # relative board ROI for iPhone-13 screenshots
 }
 
 # probability of each augmentation
-ZOOM_P = 0.60
-BC_P = THICKEN_P = NOISE_P = 0.50
-THIN_P = BLUR_P = 0.20
+ZOOM_P = 0.50
+BC_P = NOISE_P = THIN_P = 0.50
+THICKEN_P = 0.30
+BLUR_P = 0.20
 
 pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
 TESS_CONFIG = '-l eng --psm 10 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -143,10 +144,13 @@ def zoom_at(img, zoom=1):
    return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
 
 def random_aug(tile):
-   if random.random()<THICKEN_P:
-      tile=cv2.dilate(tile,np.ones((2,2),np.uint8),1)
+   # if random.random()<THICKEN_P:
+   #    tile=cv2.dilate(tile,np.ones((2,2),np.uint8),1)
    if random.random()<THIN_P:
-      tile=cv2.erode(tile,np.ones((3,3),np.uint8),1)
+      onetofour1 = random.randrange(3,6)
+      onetofour2 = random.randrange(3,6)
+      iters = random.randrange(1,4)
+      tile=cv2.erode(tile,np.ones((onetofour1,onetofour2),np.uint8),iters)
    if random.random()<BLUR_P:
       tile=cv2.GaussianBlur(tile,(3,3),0)
    if random.random()<BC_P:  # brightness/contrast

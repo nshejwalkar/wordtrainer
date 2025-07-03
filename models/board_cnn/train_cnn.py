@@ -32,14 +32,14 @@ DATA_DIR        = '../../models_data/train'          # root with A..Z/
 WEIGHTS_OUT     = 'board_cnn.pt'                     # saved in same folder as script
 BATCH_SIZE      = 32
 EPOCHS          = 20
-LR              = 1e-2
+LR              = 1e-3
 SCHED_FACTOR    = 0.3
 PATIENCE        = 2
 EARLY_STOP_PATIENCE = 3                              # epochs w/o val-loss improvement
 IMG_SIZE        = 90                                 # tiles are 90×90
 DEVICE          = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-SEED = 21  # Pick any integer
+SEED = 56  # Pick any integer
 random.seed(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed_all(SEED)
