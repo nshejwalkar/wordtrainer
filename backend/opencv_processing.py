@@ -56,11 +56,12 @@ def transcode_to_120fps(video_path, output_path):
 # converts relative coordinates to pixel coordinates based on video resolution
 # returns a dictionary with the same structure as magic, but with absolute pixel values
 # ONLY for videos. INDETERMINATE BEHAVIOR FOR IMAGES
-def _magic_to_pixels(video_path):
+def _magic_to_pixels(video_path, debug=True):
    cap = cv2.VideoCapture(video_path)
    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-   print(f"Video dimensions: {width}x{height}")
+   if debug:
+      print(f"Video dimensions: {width}x{height}")
    cap.release()
    pixels = {}
    for key in MAGIC.keys():
@@ -73,10 +74,11 @@ def _magic_to_pixels(video_path):
    return pixels
 
 # this is for images
-def _magic_to_pixels_image(image_path):
+def _magic_to_pixels_image(image_path, debug=True):
    img = cv2.imread(image_path)
    height, width = img.shape[:2]
-   print(f"Image dimensions: {height}x{width}")
+   if debug:
+      print(f"Image dimensions: {height}x{width}")
    
    pixels = {}
    for key in MAGIC.keys():
@@ -87,8 +89,9 @@ def _magic_to_pixels_image(image_path):
 # extracts the region of interest (ROI) from the frame based on the magic coordinates
 # interest is a key in the magic dictionary: 'time', 'board', 'word_count', 'score'
 # if the roi.shape is returning (0,0,3) or 0x0: THE PROBLEM IS IN _MAGIC_TO_PIXELS() NOT HERE
-def _get_roi(frame: np.ndarray, magic_pix, interest):
-   print(frame.shape)
+def _get_roi(frame: np.ndarray, magic_pix, interest, debug=True):
+   if debug:
+      print(frame.shape)
    interest_subdict = magic_pix[interest]
    ytop = interest_subdict['ytop']
    ybottom = interest_subdict['ybottom']
@@ -96,7 +99,8 @@ def _get_roi(frame: np.ndarray, magic_pix, interest):
    xright = interest_subdict['xright']
    roi = frame[ytop:ybottom, xleft:xright]
    # roi = frame[interest_subdict['ytop']:interest_subdict['ybottom'], interest_subdict['xleft']:interest_subdict['xright']]
-   print(roi.shape)
+   if debug:
+      print(roi.shape)
    return roi
 
 # gets the nth frame from the video
@@ -107,30 +111,36 @@ def _get_frame(video_path, number):
    return frame
 
 # applies preprocessing to the ROI to prepare it for OCR
-def _apply_preprocessing_board(roi, modality='video', shape=(1920, 888, 3)):  # somehow this works 
-   cv2.imshow('roi', roi)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+def _apply_preprocessing_board(roi, modality='video', shape=(1920, 888, 3), debug=True):  # somehow this works 
+   if debug:
+      cv2.imshow('roi', roi)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
    # resize image to 1920x888
    height, width = shape[0], shape[1]
-   print(f'height is {height}')
-   print(f'width is {width}')
-   print(f'fx is {888/width}')
-   print(f'fy is {1920/height}')
+   if debug:
+      print(f'height is {height}')
+      print(f'width is {width}')
+      print(f'fx is {888/width}')
+      print(f'fy is {1920/height}')
    resized = cv2.resize(roi, None, fx=888/width, fy=1920/height, interpolation=cv2.INTER_AREA)
-   print(f'new shape is {resized.shape}')
-   cv2.imshow('roi', resized)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   if debug:
+      print(f'new shape is {resized.shape}')
+   if debug:
+      cv2.imshow('roi', resized)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
    # make gray
    gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
-   cv2.imshow('gray', gray)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   if debug:
+      cv2.imshow('gray', gray)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
    equalized = cv2.equalizeHist(gray)
-   cv2.imshow('equalized', equalized)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   if debug:
+      cv2.imshow('equalized', equalized)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
 
    # binary threshold: anything less than 21 becomes white. 21-255 becomes black
    if modality == 'video':
@@ -142,9 +152,10 @@ def _apply_preprocessing_board(roi, modality='video', shape=(1920, 888, 3)):  # 
    # close letters to get rid of artifacts
    kernel = np.ones((5,5),np.uint8)
    closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-   cv2.imshow('closing', closing)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   if debug:
+      cv2.imshow('closing', closing)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
  
    # contours
    closing_contours = closing.copy()
@@ -152,9 +163,10 @@ def _apply_preprocessing_board(roi, modality='video', shape=(1920, 888, 3)):  # 
    contours = items[0] if len(items) == 2 else items[1]
    cv2.drawContours(closing_contours, contours, -1, (0,0,255), 2)
 
-   cv2.imshow('closing_contours', closing_contours)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   if debug:
+      cv2.imshow('closing_contours', closing_contours)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
 
    # want to isolate black letters
    # lower = np.array([0,0,0])
@@ -304,7 +316,7 @@ def _split_into_tiles(board_roi, board_size):
                                        pad_x, TARGET_SIZE - cropped.shape[1] - pad_x,
                                        cv2.BORDER_CONSTANT, value=0)
             
-         print(f'area: {padded.shape[0]*padded.shape[1]}')
+         # print(f'area: {padded.shape[0]*padded.shape[1]}')
 
          # cv2.imshow('tile padded', padded)
          # cv2.waitKey(0)
@@ -365,59 +377,70 @@ def _get_letter_from_tile(tile):
 
 
 # extracts the board from the video and returns it as a matrix of characters
-def extract_board(video_path):
+def extract_board(video_path, debug=True):
    frame = _get_frame(video_path, 160)  # starts at the 160th frame, around 2 seconds in. change later
-   magic_pix = _magic_to_pixels(video_path)
-   board_roi = _get_roi(frame, magic_pix, 'board')
-   cv2.imshow('board roi raw', board_roi)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
-   board_roi = _apply_preprocessing_board(board_roi, shape=frame.shape)
-   cv2.imshow('board roi', board_roi)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
-   
-   tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
-   for i, tile in enumerate(tiles):
-      cv2.imshow(f'tile {i}', tile)
+   magic_pix = _magic_to_pixels(video_path, debug=debug)
+   board_roi = _get_roi(frame, magic_pix, 'board', debug=debug)
+   if debug:
+      cv2.imshow('board roi raw', board_roi)
       cv2.waitKey(0)
       cv2.destroyAllWindows()
-      letter = _get_letter_from_tile(tile)
-      print(letter, end='', flush=True)
-      if (i + 1) % 5 == 0:
-         print(flush=True)
+   board_roi = _apply_preprocessing_board(board_roi, shape=frame.shape, debug=debug)
+   if debug:
+      cv2.imshow('board roi', board_roi)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
    
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
+   tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
+   string25 = ""
+   for i, tile in enumerate(tiles):
+      if debug:
+         cv2.imshow(f'tile {i}', tile)
+         cv2.waitKey(0)
+         cv2.destroyAllWindows()
+      letter = _get_letter_from_tile(tile)
+      string25 += letter
+      if debug:
+         print(letter, end='', flush=True)
+         if (i + 1) % 5 == 0:
+            print(flush=True)
+   
 
    # turn to a matrix
    # send = text.split('\n')
    # for i in range(len(send)):
    #    send[i] = list(send[i])
    
-   # return send
+   return string25
 
-def extract_board_from_image(image_path):
+def extract_board_from_image(image_path, debug=True):
    frame = cv2.imread(image_path)
-   magic_pix = _magic_to_pixels_image(image_path)
-   board_roi = _get_roi(frame, magic_pix, 'board')
-   cv2.imshow('board roi raw', board_roi)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
-   board_roi = _apply_preprocessing_board(board_roi, modality='image', shape=frame.shape)
-   cv2.imshow('board roi', board_roi)
-   cv2.waitKey(0)
-   cv2.destroyAllWindows()
-
-   tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (40,40) tiles
-   for i, tile in enumerate(tiles):
-      cv2.imshow(f'tile {i}', tile)
+   magic_pix = _magic_to_pixels_image(image_path, debug=debug)
+   board_roi = _get_roi(frame, magic_pix, 'board', debug=debug)
+   if debug:
+      cv2.imshow('board roi raw', board_roi)
       cv2.waitKey(0)
       cv2.destroyAllWindows()
+   board_roi = _apply_preprocessing_board(board_roi, modality='image', shape=frame.shape, debug=debug)
+   if debug:
+      cv2.imshow('board roi', board_roi)
+      cv2.waitKey(0)
+      cv2.destroyAllWindows()
+
+   tiles = _split_into_tiles(board_roi, 5)  # split into 5x5, (90,90) tiles
+   string25 = ""
+   for i, tile in enumerate(tiles):
       letter = _get_letter_from_tile(tile)
-      print(letter, end='', flush=True)
-      if (i + 1) % 5 == 0:
-         print(flush=True)
+      string25 += letter
+      if debug:
+         cv2.imshow(f'tile {i}', tile)
+         cv2.waitKey(0)
+         cv2.destroyAllWindows()
+         print(letter, end='', flush=True)
+         if (i + 1) % 5 == 0:
+            print(flush=True)
+   
+   return string25
 
    
 
@@ -576,12 +599,52 @@ if __name__ == '__main__':
    # seek_thru_video(sample_video_120, start_frame=0)
    # transcode_to_120fps(sample_video, sample_video_120)
    # extract_words_found(sample_video_120)
-   # extract_board(sample_video)
+   extract_board(r"C:\Users\neela\new_era\wordtrainer\backend\uploads\ScreenRecording_06-23-2025 19-51-01_1.mov")
+   # extract_board_from_image(r"C:\Users\neela\new_era\wordtrainer\models_data\pics\IMG_6388.PNG")
 
-   videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
-   print(videos)
-   for video in videos[-1:]:
-      extract_board(video)
+   # videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
+   # print(videos)
+   # for video in videos[-1:]:
+      # extract_board(video)
+
+   #create
+   # images = [os.path.abspath(os.path.join('../models_data/pics',file)) for file in os.listdir('../models_data/pics')]
+   # with open("new_or_overwritten_file.txt", "w") as f:
+   #    # print(images)
+   #    for image in images:
+   #       board = extract_board_from_image(image, debug=False)
+   #       f.write(image)
+   #       f.write("&-")
+   #       f.write(board)
+   #       f.write('\n')
+   # videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
+   # print(videos)
+   # with open("new_or_overwritten_file.txt", "a") as f:
+   #    for video in videos:
+   #       board = extract_board(video, debug=False)
+   #       f.write(video)
+   #       f.write("&-")
+   #       f.write(board)
+   #       f.write('\n')
+
+
+   #verify
+   # with open("new_or_overwritten_file.txt", "r") as f:
+   #    for line in f.readlines():
+   #       path, answer = line.split("&-")
+   #       answer = answer.strip()
+   #       if not os.path.exists(path):
+   #          continue
+   #       if "ScreenRecording" in path:
+   #          result = extract_board(path, debug=False)
+   #       else:
+   #          result = extract_board_from_image(path, debug=False)
+   #       if answer == result:
+   #          print(f"{path}: correct")
+   #       else:
+   #          print(f"{path}: NOT CORRECT. answer vs result below")
+   #          print(f"----- {answer}")
+   #          print(f"----- {result}")
 
    # absroot = os.path.abspath('../models_data/pics')
    # for impath in os.listdir(absroot):
