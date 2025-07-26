@@ -1,0 +1,38 @@
+frida -H 127.0.0.1:27042 -n MobileSMS -t 30000
+then open up messages.
+
+downloaded dopamine, sileo and filza on phone
+got frida and sideloadly to connect to phone
+opened frida
+frida-ps -Ua gives all running processes on phone. Uai for all
+frida -U W "specific process in reverse name" to open REPL terminal inside that process. --pause if closes immediately, -l script.js to run script right on startup
+
+functions:
++ is class
+- is instance
+
+all interesting classes in com.gamerdelights.gamepigeon.ext:
+HuntWord
+WordbitsBlock
+WordbitsNode
+WordgamesStoreScene
+
+Object.keys(ObjC.classes).filter(n => /game|Game|word|Word/i.test(n)).sort().forEach(n => console.log(n));
+
+Object.keys(ObjC.classes).sort().forEach(n => console.log(n));
+
+Process.enumerateModules().sort((a,b)=>{if (a.path<b.path) return -1; if (a.path>b.path) return 1; return 0;}).forEach(m=>console.log(m.path, m.name));
+
+// List all modules (these are all of the modules/dynamic libraries loaded by the app, by dyld?)
+Process.enumerateModules().forEach(m => console.log(m.name));
+
+// Get a specific class's methods in ObjC
+ObjC.classes.MyAwesomeClass.$methods.forEach(m => console.log(m));
+
+// Show functions in a module (not a thing)
+Module.enumerateExports("libsystem_kernel.dylib").forEach(exp => console.log(exp.name));
+
+// get the address of global export (from c/c++ libs)
+Module.getGlobalExportByName("malloc")
+so the process has loaded some modules (all? via the dyld shared cache)
+the app itself is written in objective C, so it is structured into classes -> methods

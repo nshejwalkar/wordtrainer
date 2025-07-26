@@ -599,7 +599,7 @@ if __name__ == '__main__':
    # seek_thru_video(sample_video_120, start_frame=0)
    # transcode_to_120fps(sample_video, sample_video_120)
    # extract_words_found(sample_video_120)
-   extract_board(r"C:\Users\neela\new_era\wordtrainer\backend\uploads\ScreenRecording_06-23-2025 19-51-01_1.mov")
+   # extract_board(r"C:\Users\neela\new_era\wordtrainer\backend\uploads\ScreenRecording_06-23-2025 19-51-01_1.mov")
    # extract_board_from_image(r"C:\Users\neela\new_era\wordtrainer\models_data\pics\IMG_6388.PNG")
 
    # videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
@@ -608,24 +608,24 @@ if __name__ == '__main__':
       # extract_board(video)
 
    #create
-   # images = [os.path.abspath(os.path.join('../models_data/pics',file)) for file in os.listdir('../models_data/pics')]
-   # with open("new_or_overwritten_file.txt", "w") as f:
-   #    # print(images)
-   #    for image in images:
-   #       board = extract_board_from_image(image, debug=False)
-   #       f.write(image)
-   #       f.write("&-")
-   #       f.write(board)
-   #       f.write('\n')
-   # videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
-   # print(videos)
-   # with open("new_or_overwritten_file.txt", "a") as f:
-   #    for video in videos:
-   #       board = extract_board(video, debug=False)
-   #       f.write(video)
-   #       f.write("&-")
-   #       f.write(board)
-   #       f.write('\n')
+   with open("correct.txt", "w") as f:
+      images = [os.path.abspath(os.path.join('../models_data/pics',file)) for file in os.listdir('../models_data/pics')]
+      # print(images)
+      for image in images:
+         board = extract_board_from_image(image, debug=False)
+         f.write(image)
+         f.write("&-")
+         f.write(board)
+         f.write('\n')
+
+      videos = [os.path.abspath(os.path.join('./uploads',file)) for file in os.listdir('./uploads') if file.startswith('Screen')]
+      # print(videos)
+      for video in videos:
+         board = extract_board(video, debug=False)
+         f.write(video)
+         f.write("&-")
+         f.write(board)
+         f.write('\n')
 
 
    #verify
